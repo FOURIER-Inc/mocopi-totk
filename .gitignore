@@ -1,3 +1,5 @@
 /target
 *.csv
 *.xlsx
+
+.idea/aws.xml
