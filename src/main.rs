@@ -14,6 +14,10 @@ use std::io::{Cursor, Read, Write};
 use std::net::UdpSocket;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
+use bitvec::{bitarr, bits};
+use bitvec::prelude::{Lsb0, Msb0};
+use bitvec::slice::BitSlice;
+use bitvec::view::BitView;
 
 #[derive(Serialize)]
 struct Row<'a> {
@@ -60,87 +64,6 @@ lazy_static! {
     };
 }
 
-trait Button {
-    type Value;
-}
-
-struct Dpad;
-
-enum DpadValue {
-    Up,
-    Down,
-    Left,
-    Right,
-}
-
-impl Button for Dpad {
-    type Value = DpadValue;
-}
-
-struct ActionButton; // 適当に命名
-
-enum ActionButtonValue {
-    A,
-    B,
-    X,
-    Y,
-}
-
-impl Button for ActionButton {
-    type Value = ActionButtonValue;
-}
-
-struct SideButton;
-
-enum SideButtonValue {
-    L,
-    R,
-    ZL,
-    ZR,
-}
-
-impl Button for SideButton {
-    type Value = SideButtonValue;
-}
-
-struct ControlButton;
-
-enum ControlButtonValue {
-    Minus,
-    Plus,
-    Home,
-    Capture,
-}
-
-impl Button for ControlButton {
-    type Value = ControlButtonValue;
-}
-
-struct StickPressButton;
-
-enum StickPressButtonValue {
-    Left,
-    Right,
-}
-
-impl Button for StickPressButton {
-    type Value = StickPressButtonValue;
-}
-
-fn press_button<B: Button>(inputs: Arc<Mutex<Input>>, button: B, value: B::Value) {
-    let inputs = Arc::clone(&inputs).lock()?;
-    *inputs.buttons.push(value);
-}
-
-enum StickType {
-    Left,
-    Right,
-}
-
-fn tilt_stick(stick_type: StickType, x: f64, y: f64) {
-
-}
-
 fn write(fp: &mut dyn Write, ack: u8, cmd: u8, buf: &[u8]) -> Result<(), Box<dyn Error + '_>> {
     let mut data = vec![ack, cmd];
     data.extend(buf);
@@ -152,7 +75,7 @@ fn write(fp: &mut dyn Write, ack: u8, cmd: u8, buf: &[u8]) -> Result<(), Box<dyn
     Ok(())
 }
 
-fn uart(&mut self, ack: bool, sub_cmd: u8, data: &[u8]) -> Result<(), Box<dyn Error + '_>> {
+fn uart(fp: &mut dyn Write, count: u8, ack: bool, sub_cmd: u8, data: &[u8]) -> Result<(), Box<dyn Error + '_>> {
     let ack_byte = if ack {
         0x80 | if data.len() > 0 { sub_cmd } else { 0x00 }
     } else {
@@ -163,9 +86,69 @@ fn uart(&mut self, ack: bool, sub_cmd: u8, data: &[u8]) -> Result<(), Box<dyn Er
     buf.append(&mut vec![ack_byte, sub_cmd]);
     buf.append(&mut data.to_vec());
 
-    self.write(0x21, self.count, buf.as_slice())?;
+    write(fp, 0x21, count, buf.as_slice())?;
 
     Ok(())
+}
+
+fn get_input_buffer(input: &Input) -> [u8; 11] {
+    let left =
+        bit_input(input.y, 0) |
+            bit_input(input.x, 1) |
+            bit_input(input.b, 2) |
+            bit_input(input.a, 3) |
+            bit_input(input.r, 6) |
+            bit_input(input.zr, 7);
+
+    let center =
+        bit_input(input.minus, 0) |
+            bit_input(input.plus, 1) |
+            bit_input(input.stick_l.press, 2) |
+            bit_input(input.stick_r.press, 3) |
+            bit_input(input.home, 4) |
+            bit_input(input.capture, 5);
+
+    let right =
+        bit_input(input.down, 0) |
+            bit_input(input.up, 1) |
+            bit_input(input.right, 2) |
+            bit_input(input.left, 3) |
+            bit_input(input.l, 6) |
+            bit_input(input.zl, 7);
+
+    let lx = ((1.0 + input.stick_l.x) * 2047.5).floor() as u16;
+    let ly = ((1.0 + input.stick_l.y) * 2047.5).floor() as u16;
+    let rx = ((1.0 + input.stick_r.x) * 2047.5).floor() as u16;
+    let ry = ((1.0 + input.stick_r.y) * 2047.5).floor() as u16;
+
+    let left_stick = pack_shorts(lx, ly);
+    let right_stick = pack_shorts(rx, ry);
+
+    [
+        0x81,
+        left,
+        center,
+        right,
+        left_stick[0],
+        left_stick[1],
+        left_stick[2],
+        right_stick[0],
+        right_stick[1],
+        right_stick[2],
+        0x00
+    ]
+}
+
+fn bit_input(input: u8, offset: u8) -> u8 {
+    if input == 0 { 0 } else { 1 << offset }
+}
+
+fn pack_shorts(v1: u16, v2: u16) -> [u8; 3] {
+    [
+        v1.to_be_bytes()[1],
+        (v2 << 4).to_be_bytes()[0] | ((v1 >> 8) & 0x0f).to_be_bytes()[1],
+        (v2 >> 4).to_be_bytes()[1],
+    ]
 }
 
 pub struct Dpad {
@@ -214,25 +197,57 @@ pub struct Controller {
 }
 
 struct Input {
-    pub buttons: Vec<Button>,
+    pub up: u8,
+    pub down: u8,
+    pub left: u8,
+    pub right: u8,
+    pub a: u8,
+    pub b: u8,
+    pub x: u8,
+    pub y: u8,
+    pub l: u8,
+    pub r: u8,
+    pub zl: u8,
+    pub zr: u8,
+    pub minus: u8,
+    pub plus: u8,
+    pub home: u8,
+    pub capture: u8,
     pub stick_l: Stick,
     pub stick_r: Stick,
 }
 
-fn test() {
-    let i = Arc::new(Mutex::new(Input {
-        buttons: vec![],
-        stick_l: Stick {
-            x: 0.0,
-            y: 0.0,
-            press: 0,
-        },
-        stick_r: Stick {
-            x: 0.0,
-            y: 0.0,
-            press: 0,
-        },
-    }));
+impl Input {
+    pub fn init() -> Self {
+        Self {
+            up: 0,
+            down: 0,
+            left: 0,
+            right: 0,
+            a: 0,
+            b: 0,
+            x: 0,
+            y: 0,
+            l: 0,
+            r: 0,
+            zl: 0,
+            zr: 0,
+            minus: 0,
+            plus: 0,
+            home: 0,
+            capture: 0,
+            stick_l: Stick {
+                x: 0.0,
+                y: 0.0,
+                press: 0,
+            },
+            stick_r: Stick {
+                x: 0.0,
+                y: 0.0,
+                press: 0,
+            },
+        }
+    }
 }
 
 impl Controller {
@@ -359,8 +374,7 @@ fn connect(mut c: Controller) -> Result<(), Box<dyn Error>> {
                     }
                     0x02 => {
                         c.uart(true, buf[10], &[
-                            0x03, 0x48, 0x03,
-                            0x02, 0x5e, 0x53, 0x00, 0x5e, 0x00, 0x00, 0x03, 0x01,
+                            0x03, 0x48, 0x03, 0x02, 0x5e, 0x53, 0x00, 0x5e, 0x00, 0x00, 0x03, 0x01,
                         ]).unwrap();
                     }
                     0x03 | 0x08 | 0x30 | 0x38 | 0x40 | 0x41 | 0x48 => {
