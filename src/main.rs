@@ -80,7 +80,7 @@ fn write(
     data.append(&mut vec![0u8; 62 - buf.len()]);
     writable.write(&data)?;
 
-    println!("Write: ack: {:X}, cmd: {:X}, buf: {:?}", ack, cmd, buf);
+    println!("Write: {:?}", data);
 
     Ok(())
 }
@@ -532,6 +532,7 @@ fn connect<T>(
     start_counter(Arc::clone(&counter), Arc::clone(&stop_signal));
 
     thread::spawn(move || {
+        println!("start communication");
         loop {
             let mut buf = [0u8; 128];
             let mut f = file.lock().unwrap();
