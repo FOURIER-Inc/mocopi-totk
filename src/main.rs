@@ -80,7 +80,7 @@ fn write(
     data.append(&mut vec![0u8; 62 - buf.len()]);
     writable.write(&data)?;
 
-    println!("Write: {:?}", data);
+    println!("Write: {:02X?}", data);
 
     Ok(())
 }
@@ -538,7 +538,7 @@ fn connect<T>(
             let mut f = file.lock().unwrap();
             (*f).read(&mut buf).unwrap();
 
-            println!("read: {:?}", buf);
+            println!("Read: {:02X?}", buf);
             match buf[0] {
                 0x80 => match buf[1] {
                     0x01 => {
@@ -624,7 +624,7 @@ fn connect<T>(
                                     uart_data.as_ref(),
                                 ).unwrap();
 
-                                println!("Read SPI address: {:X} {:X} {:X} {:?}", buf[12], buf[11], buf[15], &d[usize::from(buf[11])..usize::from(buf[11] + buf[15])])
+                                println!("Read SPI address: {:X} {:X} {:X} {:02X?}", buf[12], buf[11], buf[15], &d[usize::from(buf[11])..usize::from(buf[11] + buf[15])])
                             }
                             None => {
                                 uart(
@@ -651,7 +651,7 @@ fn connect<T>(
                         ).unwrap();
                     }
                     _ => {
-                        println!("UART unknown request {:X} {:?}", buf[10], buf);
+                        println!("UART unknown request {:X} {:02X?}", buf[10], buf);
                     }
                 },
                 0x00 | 0x10 | _ => {
