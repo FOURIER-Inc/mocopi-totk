@@ -18,6 +18,7 @@ use std::sync::{Arc, mpsc, Mutex, MutexGuard};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 use bitvec::{bitarr, bits};
+use bitvec::macros::internal::funty::Fundamental;
 use bitvec::prelude::{Lsb0, Msb0};
 use bitvec::slice::BitSlice;
 use bitvec::view::BitView;
@@ -79,7 +80,7 @@ fn write(
     data.append(&mut vec![0u8; 62 - buf.len()]);
     writable.write(&data)?;
 
-    dbg!(format!("Write: ack: {:02x}, cmd: {:02x}, buf: {:?}", ack, cmd, buf));
+    println!("Write: ack: {:X}, cmd: {:X}, buf: {:?}", ack, cmd, buf);
 
     Ok(())
 }
@@ -93,7 +94,7 @@ fn uart(
     data: &[u8],
 ) -> Result<(), Box<dyn Error>> {
     let ack_byte = if ack {
-        0x80 | if data.len() > 0 { sub_cmd } else { 0x00 }
+        if data.len() > 0 { 0x80 | sub_cmd } else { 0x00 }
     } else {
         0x00
     };
@@ -375,9 +376,9 @@ impl Input {
 
     fn pack_shorts(v1: u16, v2: u16) -> [u8; 3] {
         [
-            v1.to_be_bytes()[1],
-            (v2 << 4).to_be_bytes()[0] | ((v1 >> 8) & 0x0f).to_be_bytes()[1],
-            (v2 >> 4).to_be_bytes()[1],
+            v1.to_le_bytes()[0],
+            ((v2 << 4) & 0xf0).to_le_bytes()[0] | ((v1 >> 8) & 0x0f).to_le_bytes()[0],
+            (v2 >> 4).to_le_bytes()[0],
         ]
     }
 }
@@ -557,9 +558,11 @@ fn connect<T>(
                             Arc::clone(&stop_signal),
                         );
                     }
-                    0x05 => {}
+                    0x05 => {
+                        *stop_signal.lock().unwrap() = true;
+                    }
                     _ => {
-                        dbg!("received unknown command", buf[0]);
+                        println!("Received unknown command {:X}", buf[0]);
                     }
                 },
                 0x01 => match buf[10] {
@@ -618,6 +621,8 @@ fn connect<T>(
                                     buf[10],
                                     uart_data.as_ref(),
                                 ).unwrap();
+
+                                println!("Read SPI address: {:X} {:X} {:X} {:?}", buf[12], buf[11], buf[15], &d[usize::from(buf[11])..usize::from(buf[11] + buf[15])])
                             }
                             None => {
                                 uart(
@@ -628,6 +633,8 @@ fn connect<T>(
                                     buf[10],
                                     &[],
                                 ).unwrap();
+
+                                println!("Unknown SPI address: {:X} {:X}", buf[12], buf[15]);
                             }
                         }
                     }
@@ -642,11 +649,11 @@ fn connect<T>(
                         ).unwrap();
                     }
                     _ => {
-                        dbg!("received unknown command", buf[0]);
+                        println!("UART unknown request {:X} {:?}", buf[10], buf);
                     }
                 },
                 0x00 | 0x10 | _ => {
-                    dbg!("unknown request", buf[0]);
+                    println!("Unknown request {:X}", buf[0]);
                 }
             }
         }
@@ -722,9 +729,8 @@ fn connect<T>(
 // }
 
 fn main() {
-    let target = Path::new("/dev/hidg0");
-
-    let file = Arc::new(Mutex::new(Box::new(File::open(target).unwrap())));
+    let target = env::args().nth(1).unwrap();
+    let file = Arc::new(Mutex::new(Box::new(File::options().read(true).write(true).open(target).unwrap())));
     let input = Arc::new(Mutex::new(Input::new()));
     let stop_signal = Arc::new(Mutex::new(false));
 
@@ -748,6 +754,7 @@ fn main() {
         let mut buf = [0u8; 1];
         stdin().read(&mut buf).unwrap();
 
+        println!("pushed {}", buf[0].to_string());
         match buf[0] {
             b'w' => {
                 let i = Arc::clone(&input);
@@ -785,13 +792,13 @@ fn main() {
         };
     }
 
-    Command::new("stty")
-        .args(["-F", "/dev/tty", "-cbreak"])
-        .output()
-        .unwrap();
-
-    Command::new("stty")
-        .args(["-F", "/dev/tty", "echo"])
-        .output()
-        .unwrap();
+    // Command::new("stty")
+    //     .args(["-F", "/dev/tty", "-cbreak"])
+    //     .output()
+    //     .unwrap();
+    //
+    // Command::new("stty")
+    //     .args(["-F", "/dev/tty", "echo"])
+    //     .output()
+    //     .unwrap();
 }
