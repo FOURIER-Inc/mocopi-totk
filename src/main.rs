@@ -542,7 +542,7 @@ fn connect<T>(
             let mut f = file.lock().unwrap();
             let n = (*f).read(&mut buf).unwrap();
 
-            println!("Read: {:02X?}", buf[..n]);
+            println!("Read: {:02X?}", &buf[..n]);
             match buf[0] {
                 0x80 => match buf[1] {
                     0x01 => {
