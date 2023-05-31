@@ -517,7 +517,7 @@ fn start_counter(count: Arc<Mutex<u8>>, stop_signal: Arc<Mutex<bool>>) {
             let mut c = count.lock().unwrap();
             *c = c.wrapping_add(1);
 
-            tokio::time::sleep(Duration::from_millis(5)).await;
+            tokio::time::sleep(Duration::from_millis(5));
         }
     });
 }
