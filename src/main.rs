@@ -347,10 +347,12 @@ impl Input {
                 Self::bit_input(self.l, 6) |
                 Self::bit_input(self.zl, 7);
 
-        let lx = ((1.0 + self.stick_l.x) * 2047.5).floor() as u16;
-        let ly = ((1.0 + self.stick_l.y) * 2047.5).floor() as u16;
-        let rx = ((1.0 + self.stick_r.x) * 2047.5).floor() as u16;
-        let ry = ((1.0 + self.stick_r.y) * 2047.5).floor() as u16;
+        let lx = ((1.0 + self.stick_l.x) * 2047.5).round() as u16;
+        let ly = ((1.0 + self.stick_l.y) * 2047.5).round() as u16;
+        let rx = ((1.0 + self.stick_r.x) * 2047.5).round() as u16;
+        let ry = ((1.0 + self.stick_r.y) * 2047.5).round() as u16;
+
+        println!("lx: {}, ly: {}, rx: {}, ry: {}", lx, ly, rx, ry);
 
         let left_stick = Self::pack_shorts(lx, ly);
         let right_stick = Self::pack_shorts(rx, ry);
@@ -483,6 +485,8 @@ fn start_input_sending(
     let mut next = Instant::now() + interval;
 
     thread::spawn(move || {
+        println!("start input sending");
+
         loop {
             if *stop_signal.lock().unwrap() {
                 break;
@@ -536,9 +540,9 @@ fn connect<T>(
         loop {
             let mut buf = [0u8; 128];
             let mut f = file.lock().unwrap();
-            (*f).read(&mut buf).unwrap();
+            let n = (*f).read(&mut buf).unwrap();
 
-            println!("Read: {:02X?}", buf);
+            println!("Read: {:02X?}", buf[..n]);
             match buf[0] {
                 0x80 => match buf[1] {
                     0x01 => {
@@ -564,7 +568,7 @@ fn connect<T>(
                         *stop_signal.lock().unwrap() = true;
                     }
                     _ => {
-                        println!("Received unknown command {:X}", buf[0]);
+                        println!("Received unknown command {:02X}", buf[0]);
                     }
                 },
                 0x01 => match buf[10] {
@@ -624,7 +628,7 @@ fn connect<T>(
                                     uart_data.as_ref(),
                                 ).unwrap();
 
-                                println!("Read SPI address: {:X} {:X} {:X} {:02X?}", buf[12], buf[11], buf[15], &d[usize::from(buf[11])..usize::from(buf[11] + buf[15])])
+                                println!("Read SPI address: {:02X} {:02X} {:0X} {:02X?}", buf[12], buf[11], buf[15], &d[usize::from(buf[11])..usize::from(buf[11] + buf[15])])
                             }
                             None => {
                                 uart(
@@ -636,7 +640,7 @@ fn connect<T>(
                                     &[],
                                 ).unwrap();
 
-                                println!("Unknown SPI address: {:X} {:X}", buf[12], buf[15]);
+                                println!("Unknown SPI address: {:02X} {:02X}", buf[12], buf[15]);
                             }
                         }
                     }
@@ -651,11 +655,11 @@ fn connect<T>(
                         ).unwrap();
                     }
                     _ => {
-                        println!("UART unknown request {:X} {:02X?}", buf[10], buf);
+                        println!("UART unknown request {:02X} {:02X?}", buf[10], buf);
                     }
                 },
                 0x00 | 0x10 | _ => {
-                    println!("Unknown request {:X}", buf[0]);
+                    println!("Unknown request {:02X}", buf[0]);
                 }
             }
         }
