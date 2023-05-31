@@ -13,3 +13,4 @@ lazy_static = "1.4.0"
 local-ip-address = "0.5.1"
 mocopi_parser = "0.3.1"
 serde = { version = "1.0.163", features = ["derive"] }
+tokio = { version = "1.28.2", features = ["full"] }

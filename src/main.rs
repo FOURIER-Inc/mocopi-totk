@@ -484,7 +484,7 @@ fn start_input_sending(
     let interval = Duration::from_millis(30);
     let mut next = Instant::now() + interval;
 
-    thread::spawn(move || {
+    tokio::task::spawn(async move {
         println!("start input sending");
 
         loop {
@@ -502,11 +502,13 @@ fn start_input_sending(
             sleep(next - Instant::now());
             next += interval;
         }
+
+        println!("end input sending");
     });
 }
 
 fn start_counter(count: Arc<Mutex<u8>>, stop_signal: Arc<Mutex<bool>>) {
-    thread::spawn(move || {
+    tokio::task::spawn(async move {
         loop {
             if *stop_signal.lock().unwrap() {
                 break;
@@ -535,7 +537,7 @@ fn connect<T>(
 
     start_counter(Arc::clone(&counter), Arc::clone(&stop_signal));
 
-    thread::spawn(move || {
+    tokio::task::spawn(async move {
         println!("start communication");
         loop {
             let mut buf = [0u8; 128];
@@ -734,7 +736,8 @@ fn connect<T>(
 //     });
 // }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let target = env::args().nth(1).unwrap();
     let file = Arc::new(Mutex::new(Box::new(File::options().read(true).write(true).open(target).unwrap())));
     let input = Arc::new(Mutex::new(Input::new()));
