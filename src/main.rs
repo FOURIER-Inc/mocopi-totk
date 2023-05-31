@@ -499,7 +499,7 @@ fn start_input_sending(
                 &input.lock().unwrap().get_buf(),
             ).unwrap();
 
-            sleep(next - Instant::now());
+            tokio::time::sleep(next - Instant::now()).await;
             next += interval;
         }
 
@@ -517,7 +517,7 @@ fn start_counter(count: Arc<Mutex<u8>>, stop_signal: Arc<Mutex<bool>>) {
             let mut c = count.lock().unwrap();
             *c = c.wrapping_add(1);
 
-            sleep(Duration::from_millis(5));
+            tokio::time::sleep(Duration::from_millis(5)).await;
         }
     });
 }
@@ -768,32 +768,32 @@ async fn main() {
             b'w' => {
                 let i = Arc::clone(&input);
                 i.lock().unwrap().up = true;
-                thread::spawn(move || {
-                    sleep(Duration::from_millis(100));
+                tokio::task::spawn(async move {
+                    tokio::time::sleep(Duration::from_millis(100)).await;
                     i.lock().unwrap().up = false;
                 });
             }
             b'a' => {
                 let i = Arc::clone(&input);
                 i.lock().unwrap().left = true;
-                thread::spawn(move || {
-                    sleep(Duration::from_millis(100));
+                tokio::task::spawn(async move {
+                    tokio::time::sleep(Duration::from_millis(100)).await;
                     i.lock().unwrap().left = true;
                 });
             }
             b's' => {
                 let i = Arc::clone(&input);
                 i.lock().unwrap().down = true;
-                thread::spawn(move || {
-                    sleep(Duration::from_millis(100));
+                tokio::task::spawn(async move {
+                    tokio::time::sleep(Duration::from_millis(100)).await;
                     i.lock().unwrap().down = false;
                 });
             }
             b'd' => {
                 let i = Arc::clone(&input);
                 i.lock().unwrap().right = true;
-                thread::spawn(move || {
-                    sleep(Duration::from_millis(100));
+                tokio::task::spawn(async move {
+                    tokio::time::sleep(Duration::from_millis(100)).await;
                     i.lock().unwrap().right = false;
                 });
             }
